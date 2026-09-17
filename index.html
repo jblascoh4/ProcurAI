@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProcurAI</title>
 
+ <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+  const SUPABASE_URL = 'https://jwlkkwmroodorpehukvh.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_...';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f7f8fa;color:#171717}
