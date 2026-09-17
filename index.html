@@ -469,8 +469,10 @@ async function loginProcurAI() {
   });
 
   if (error) {
-    message.textContent = "Correo o contraseña incorrectos.";
+    message.textContent = "ERROR SUPABASE: " + error.message;
+    console.error(error);
     return;
+}
   }
 
   message.textContent = "";
