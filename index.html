@@ -368,6 +368,128 @@ function createDraft(){
   message.innerHTML = "✓ Borrador preparado. La conexión real con Outlook se añadirá en el siguiente módulo.";
 }
 </script>
+<!-- LOGIN PROCURAI -->
+<div id="loginPage" style="
+  position:fixed;
+  inset:0;
+  background:#f7f8fa;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:Arial,Helvetica,sans-serif;
+">
+  <div style="
+    width:100%;
+    max-width:420px;
+    background:white;
+    padding:40px;
+    border-radius:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.08);
+  ">
+
+    <div style="font-size:26px;font-weight:700;margin-bottom:8px;">
+      ⚖️ ProcurAI
+    </div>
+
+    <h1 style="font-size:28px;margin:28px 0 8px;">
+      Bienvenida
+    </h1>
+
+    <p style="color:#777;margin-bottom:28px;">
+      Accede a tu despacho inteligente
+    </p>
+
+    <input
+      id="loginEmail"
+      type="email"
+      placeholder="Correo electrónico"
+      style="
+        width:100%;
+        padding:15px;
+        border:1px solid #ddd;
+        border-radius:12px;
+        margin-bottom:12px;
+        outline:none;
+      "
+    >
+
+    <input
+      id="loginPassword"
+      type="password"
+      placeholder="Contraseña"
+      style="
+        width:100%;
+        padding:15px;
+        border:1px solid #ddd;
+        border-radius:12px;
+        margin-bottom:18px;
+        outline:none;
+      "
+    >
+
+    <button
+      onclick="loginProcurAI()"
+      style="
+        width:100%;
+        padding:15px;
+        border:none;
+        border-radius:12px;
+        background:#171717;
+        color:white;
+        font-weight:600;
+        font-size:15px;
+      "
+    >
+      Entrar →
+    </button>
+
+    <p id="loginMessage" style="
+      margin-top:16px;
+      font-size:14px;
+      color:#d33;
+      text-align:center;
+    "></p>
+
+  </div>
+</div>
+
+<script>
+async function loginProcurAI() {
+
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+  const message = document.getElementById("loginMessage");
+
+  message.textContent = "Entrando...";
+
+  const { data, error } = await db.auth.signInWithPassword({
+    email: email,
+    password: password
+  });
+
+  if (error) {
+    message.textContent = "Correo o contraseña incorrectos.";
+    return;
+  }
+
+  message.textContent = "";
+
+  document.getElementById("loginPage").style.display = "none";
+}
+
+async function comprobarSesion() {
+
+  const { data } = await db.auth.getSession();
+
+  if (data.session) {
+    document.getElementById("loginPage").style.display = "none";
+  }
+}
+
+comprobarSesion();
+</script>
+ 
 
 </body>
 </html>
