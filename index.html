@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProcurAI</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f7f8fa;
+      color: #171717;
+    }
+
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* MENÚ LATERAL */
+
+    .sidebar {
+      width: 240px;
+      background: white;
+      border-right: 1px solid #e9e9e9;
+      padding: 28px 20px;
+      position: fixed;
+      height: 100vh;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 45px;
+    }
+
+    .logo span {
+      background: #171717;
+      color: white;
+      padding: 8px;
+      border-radius: 10px;
+      margin-right: 7px;
+    }
+
+    .menu-item {
+      padding: 13px 14px;
+      margin-bottom: 7px;
+      border-radius: 12px;
+      color: #666;
+      cursor: pointer;
+    }
+
+    .menu-item:hover {
+      background: #f3f3f3;
+      color: #111;
+    }
+
+    .menu-item.active {
+      background: #f0f0f0;
+      color: #111;
+      font-weight: 600;
+    }
+
+    /* CONTENIDO */
+
+    .main {
+      margin-left: 240px;
+      width: calc(100% - 240px);
+      padding: 45px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 35px;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 7px;
+    }
+
+    .subtitle {
+      color: #777;
+    }
+
+    .profile {
+      background: white;
+      padding: 10px 16px;
+      border-radius: 14px;
+      border: 1px solid #e8e8e8;
+    }
+
+    /* TARJETAS */
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: white;
+      padding: 22px;
+      border-radius: 18px;
+      border: 1px solid #ededed;
+    }
+
+    .card-title {
+      color: #777;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+
+    .number {
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #999;
+      margin-top: 8px;
+    }
+
+    /* BANDEJA */
+
+    .inbox {
+      background: white;
+      border: 1px solid #ededed;
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .inbox-header {
+      padding: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+    }
+
+    .inbox-header h2 {
+      font-size: 20px;
+    }
+
+    .search {
+      background: #f5f5f5;
+      border: none;
+      border-radius: 12px;
+      padding: 11px 15px;
+      width: 250px;
+      outline: none;
+    }
+
+    .email {
+      padding: 20px 24px;
+      display: grid;
+      grid-template-columns: 140px 180px 1fr 150px;
+      align-items: center;
+      border-bottom: 1px solid #f1f1f1;
+      transition: 0.2s;
+      cursor: pointer;
+    }
+
+    .email:hover {
+      background: #fafafa;
+    }
+
+    .status {
+      display: inline-block;
+      width: fit-content;
+      padding: 7px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .red {
+      background: #ffeaea;
+      color: #c64040;
+    }
+
+    .orange {
+      background: #fff1db;
+      color: #a96600;
+    }
+
+    .green {
+      background: #e7f7ec;
+      color: #27864a;
+    }
+
+    .sender {
+      font-weight: 600;
+    }
+
+    .subject {
+      color: #555;
+    }
+
+    .procedure {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .action-button {
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 10px;
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+
+    .action-button:hover {
+      background: #111;
+      color: white;
+    }
+
+    @media(max-width: 900px) {
+      .stats {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .main {
+        margin-left: 0;
+        width: 100%;
+        padding: 25px;
+      }
+
+      .email {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+    }
+
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+
+    <div class="logo">
+      <span>⚖</span> ProcurAI
+    </div>
+
+    <div class="menu-item active">🏠 Inicio</div>
+    <div class="menu-item">📩 Comunicaciones</div>
+    <div class="menu-item">📂 Expedientes</div>
+    <div class="menu-item">✍️ Borradores</div>
+    <div class="menu-item">✓ Tareas</div>
+    <div class="menu-item">🔎 Buscar</div>
+    <div class="menu-item">⚙️ Configuración</div>
+
+  </aside>
+
+
+  <main class="main">
+
+    <div class="topbar">
+
+      <div>
+        <h1>Buenos días 👋</h1>
+        <p class="subtitle">
+          Esto es lo que necesita tu atención hoy.
+        </p>
+      </div>
+
+      <div class="profile">
+        ⚖️ Despacho
+      </div>
+
+    </div>
+
+
+    <section class="stats">
+
+      <div class="card">
+        <div class="card-title">📩 Comunicaciones nuevas</div>
+        <div class="number">57</div>
+        <div class="small">Analizadas por ProcurAI</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✍️ Requieren respuesta</div>
+        <div class="number">24</div>
+        <div class="small">Borrador preparado</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔴 Prioridad alta</div>
+        <div class="number">6</div>
+        <div class="small">Revisar primero</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⏱ Tiempo ahorrado hoy</div>
+        <div class="number">1h 42m</div>
+        <div class="small">Estimación de ProcurAI</div>
+      </div>
+
+    </section>
+
+
+    <section class="inbox">
+
+      <div class="inbox-header">
+
+        <div>
+          <h2>Bandeja inteligente ✨</h2>
+          <p class="small">Comunicaciones organizadas por prioridad</p>
+        </div>
+
+        <input
+          class="search"
+          placeholder="🔎 Buscar expediente..."
+        >
+
+      </div>
+
+
+      <div class="email">
+
+        <div>
+          <span class="status red">● Urgente</span>
+        </div>
+
+        <div class="sender">
+          Carlos García
+        </div>
+
+        <div>
+          <div class="subject">
+            Solicitud de actuación procesal
+          </div>
+          <div class="procedure">
+            Procedimiento 1234/2026
+          </div>
+        </div>
+
+        <button class="action-button">
+          Revisar →
+        </button>
+
+      </div>
+
+
+      <div class="email">
+
+        <div>
+          <span class="status orange">● Revisar</span>
+        </div>
+
+        <div class="sender">
+          Marta López
+        </div>
+
+        <div>
+          <div class="subject">
+            Resolución recibida del juzgado
+          </div>
+          <div class="procedure">
+            Procedimiento 842/2026
+          </div>
+        </div>
+
+        <button class="action-button">
+          Revisar →
+        </button>
+
+      </div>
+
+
+      <div class="email">
+
+        <div>
+          <span class="status green">● Informativo</span>
+        </div>
+
+        <div class="sender">
+          Javier Martínez
+        </div>
+
+        <div>
+          <div class="subject">
+            Documentación recibida
+          </div>
+          <div class="procedure">
+            Procedimiento 557/2026
+          </div>
+        </div>
+
+        <button class="action-button">
+          Ver →
+        </button>
+
+      </div>
+
+    </section>
+
+  </main>
+
+</div>
+
+</body>
+</html>
