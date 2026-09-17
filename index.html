@@ -1,421 +1,367 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ProcurAI</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProcurAI</title>
 
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#f7f8fa;color:#171717}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
 
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      background: #f7f8fa;
-      color: #171717;
-    }
+.app{display:flex;min-height:100vh}
 
-    .app {
-      display: flex;
-      min-height: 100vh;
-    }
+/* SIDEBAR */
+.sidebar{
+  width:240px;background:#fff;border-right:1px solid #e9e9e9;
+  padding:28px 20px;position:fixed;height:100vh
+}
+.logo{font-size:24px;font-weight:700;margin-bottom:45px}
+.logo span{background:#171717;color:#fff;padding:8px;border-radius:10px;margin-right:7px}
+.menu-item{padding:13px 14px;margin-bottom:7px;border-radius:12px;color:#666;cursor:pointer}
+.menu-item:hover{background:#f3f3f3;color:#111}
+.menu-item.active{background:#f0f0f0;color:#111;font-weight:600}
 
-    /* MENÚ LATERAL */
+/* MAIN */
+.main{margin-left:240px;width:calc(100% - 240px);padding:45px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:35px}
+h1{font-size:32px;margin-bottom:7px}
+.subtitle{color:#777}
+.profile{background:#fff;padding:10px 16px;border-radius:14px;border:1px solid #e8e8e8}
 
-    .sidebar {
-      width: 240px;
-      background: white;
-      border-right: 1px solid #e9e9e9;
-      padding: 28px 20px;
-      position: fixed;
-      height: 100vh;
-    }
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:30px}
+.card{background:#fff;padding:22px;border-radius:18px;border:1px solid #ededed}
+.card-title{color:#777;font-size:14px;margin-bottom:14px}
+.number{font-size:32px;font-weight:700}
+.small{font-size:13px;color:#999;margin-top:8px}
 
-    .logo {
-      font-size: 24px;
-      font-weight: 700;
-      margin-bottom: 45px;
-    }
+.inbox{background:#fff;border:1px solid #ededed;border-radius:20px;overflow:hidden}
+.inbox-header{padding:24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee}
+.inbox-header h2{font-size:20px}
+.search{background:#f5f5f5;border:none;border-radius:12px;padding:11px 15px;width:250px;outline:none}
 
-    .logo span {
-      background: #171717;
-      color: white;
-      padding: 8px;
-      border-radius: 10px;
-      margin-right: 7px;
-    }
+.email{
+  padding:20px 24px;display:grid;
+  grid-template-columns:140px 180px 1fr 150px;
+  align-items:center;border-bottom:1px solid #f1f1f1
+}
+.email:hover{background:#fafafa}
 
-    .menu-item {
-      padding: 13px 14px;
-      margin-bottom: 7px;
-      border-radius: 12px;
-      color: #666;
-      cursor: pointer;
-    }
+.status{display:inline-block;width:fit-content;padding:7px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.red{background:#ffeaea;color:#c64040}
+.orange{background:#fff1db;color:#a96600}
+.green{background:#e7f7ec;color:#27864a}
+.sender{font-weight:600}
+.subject{color:#555}
+.procedure{font-size:13px;color:#888;margin-top:3px}
 
-    .menu-item:hover {
-      background: #f3f3f3;
-      color: #111;
-    }
+.action-button{
+  border:1px solid #ddd;background:#fff;border-radius:10px;
+  padding:9px 12px
+}
+.action-button:hover{background:#111;color:#fff}
 
-    .menu-item.active {
-      background: #f0f0f0;
-      color: #111;
-      font-weight: 600;
-    }
+/* PANTALLA DE REVISIÓN */
+.review-page{display:none}
+.back{
+  border:none;background:none;font-weight:600;margin-bottom:25px;
+  color:#555;padding:0
+}
+.back:hover{color:#000}
 
-    /* CONTENIDO */
+.review-grid{
+  display:grid;
+  grid-template-columns:1.3fr .8fr;
+  gap:22px
+}
 
-    .main {
-      margin-left: 240px;
-      width: calc(100% - 240px);
-      padding: 45px;
-    }
+.panel{
+  background:#fff;border:1px solid #ededed;
+  border-radius:20px;padding:26px;margin-bottom:20px
+}
 
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 35px;
-    }
+.panel h2{margin-bottom:18px}
+.panel h3{margin-bottom:12px;font-size:16px}
 
-    h1 {
-      font-size: 32px;
-      margin-bottom: 7px;
-    }
+.badge{
+  display:inline-block;background:#ffeaea;color:#c64040;
+  padding:7px 11px;border-radius:20px;font-size:12px;
+  font-weight:700;margin-bottom:18px
+}
 
-    .subtitle {
-      color: #777;
-    }
+.info-row{
+  display:flex;justify-content:space-between;
+  padding:12px 0;border-bottom:1px solid #f1f1f1
+}
+.info-label{color:#888}
+.info-value{font-weight:600;text-align:right}
 
-    .profile {
-      background: white;
-      padding: 10px 16px;
-      border-radius: 14px;
-      border: 1px solid #e8e8e8;
-    }
+.ai-box{
+  background:#f7f7f8;border-radius:15px;padding:18px;
+  line-height:1.6;margin-top:10px
+}
 
-    /* TARJETAS */
+.action-list{margin:10px 0 0 20px;line-height:1.8}
 
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 18px;
-      margin-bottom: 30px;
-    }
+.draft{
+  width:100%;min-height:220px;border:1px solid #e3e3e3;
+  border-radius:14px;padding:16px;outline:none;resize:vertical;
+  line-height:1.6;background:#fcfcfc
+}
+.draft:focus{border-color:#aaa;background:#fff}
 
-    .card {
-      background: white;
-      padding: 22px;
-      border-radius: 18px;
-      border: 1px solid #ededed;
-    }
+.buttons{display:flex;gap:10px;margin-top:15px}
+.primary{
+  background:#171717;color:#fff;border:none;
+  padding:12px 18px;border-radius:11px;font-weight:600
+}
+.secondary{
+  background:#fff;color:#222;border:1px solid #ddd;
+  padding:12px 18px;border-radius:11px;font-weight:600
+}
 
-    .card-title {
-      color: #777;
-      font-size: 14px;
-      margin-bottom: 14px;
-    }
+.ai-label{
+  display:inline-flex;gap:6px;align-items:center;
+  font-size:13px;color:#6b6b6b;margin-bottom:8px
+}
 
-    .number {
-      font-size: 32px;
-      font-weight: 700;
-    }
-
-    .small {
-      font-size: 13px;
-      color: #999;
-      margin-top: 8px;
-    }
-
-    /* BANDEJA */
-
-    .inbox {
-      background: white;
-      border: 1px solid #ededed;
-      border-radius: 20px;
-      overflow: hidden;
-    }
-
-    .inbox-header {
-      padding: 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #eee;
-    }
-
-    .inbox-header h2 {
-      font-size: 20px;
-    }
-
-    .search {
-      background: #f5f5f5;
-      border: none;
-      border-radius: 12px;
-      padding: 11px 15px;
-      width: 250px;
-      outline: none;
-    }
-
-    .email {
-      padding: 20px 24px;
-      display: grid;
-      grid-template-columns: 140px 180px 1fr 150px;
-      align-items: center;
-      border-bottom: 1px solid #f1f1f1;
-      transition: 0.2s;
-      cursor: pointer;
-    }
-
-    .email:hover {
-      background: #fafafa;
-    }
-
-    .status {
-      display: inline-block;
-      width: fit-content;
-      padding: 7px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .red {
-      background: #ffeaea;
-      color: #c64040;
-    }
-
-    .orange {
-      background: #fff1db;
-      color: #a96600;
-    }
-
-    .green {
-      background: #e7f7ec;
-      color: #27864a;
-    }
-
-    .sender {
-      font-weight: 600;
-    }
-
-    .subject {
-      color: #555;
-    }
-
-    .procedure {
-      font-size: 13px;
-      color: #888;
-    }
-
-    .action-button {
-      border: 1px solid #ddd;
-      background: white;
-      border-radius: 10px;
-      padding: 9px 12px;
-      cursor: pointer;
-    }
-
-    .action-button:hover {
-      background: #111;
-      color: white;
-    }
-
-    @media(max-width: 900px) {
-      .stats {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .sidebar {
-        display: none;
-      }
-
-      .main {
-        margin-left: 0;
-        width: 100%;
-        padding: 25px;
-      }
-
-      .email {
-        grid-template-columns: 1fr;
-        gap: 10px;
-      }
-    }
-
-  </style>
+@media(max-width:900px){
+  .stats{grid-template-columns:1fr 1fr}
+  .sidebar{display:none}
+  .main{margin-left:0;width:100%;padding:25px}
+  .email{grid-template-columns:1fr;gap:10px}
+  .review-grid{grid-template-columns:1fr}
+}
+</style>
 </head>
 
 <body>
 
 <div class="app">
 
-  <aside class="sidebar">
+<aside class="sidebar">
+  <div class="logo"><span>⚖</span> ProcurAI</div>
 
-    <div class="logo">
-      <span>⚖</span> ProcurAI
+  <div class="menu-item active" onclick="showHome()">🏠 Inicio</div>
+  <div class="menu-item">📩 Comunicaciones</div>
+  <div class="menu-item">📂 Expedientes</div>
+  <div class="menu-item">✍️ Borradores</div>
+  <div class="menu-item">✓ Tareas</div>
+  <div class="menu-item">🔎 Buscar</div>
+  <div class="menu-item">⚙️ Configuración</div>
+</aside>
+
+<main class="main">
+
+<!-- INICIO -->
+<div id="homePage">
+
+  <div class="topbar">
+    <div>
+      <h1>Buenos días 👋</h1>
+      <p class="subtitle">Esto es lo que necesita tu atención hoy.</p>
+    </div>
+    <div class="profile">⚖️ Despacho</div>
+  </div>
+
+  <section class="stats">
+    <div class="card">
+      <div class="card-title">📩 Comunicaciones nuevas</div>
+      <div class="number">57</div>
+      <div class="small">Analizadas por ProcurAI</div>
     </div>
 
-    <div class="menu-item active">🏠 Inicio</div>
-    <div class="menu-item">📩 Comunicaciones</div>
-    <div class="menu-item">📂 Expedientes</div>
-    <div class="menu-item">✍️ Borradores</div>
-    <div class="menu-item">✓ Tareas</div>
-    <div class="menu-item">🔎 Buscar</div>
-    <div class="menu-item">⚙️ Configuración</div>
+    <div class="card">
+      <div class="card-title">✍️ Requieren respuesta</div>
+      <div class="number">24</div>
+      <div class="small">Borrador preparado</div>
+    </div>
 
-  </aside>
+    <div class="card">
+      <div class="card-title">🔴 Prioridad alta</div>
+      <div class="number">6</div>
+      <div class="small">Revisar primero</div>
+    </div>
 
+    <div class="card">
+      <div class="card-title">⏱ Tiempo ahorrado hoy</div>
+      <div class="number">1h 42m</div>
+      <div class="small">Estimación de ProcurAI</div>
+    </div>
+  </section>
 
-  <main class="main">
+  <section class="inbox">
 
-    <div class="topbar">
-
+    <div class="inbox-header">
       <div>
-        <h1>Buenos días 👋</h1>
-        <p class="subtitle">
-          Esto es lo que necesita tu atención hoy.
-        </p>
+        <h2>Bandeja inteligente ✨</h2>
+        <p class="small">Comunicaciones organizadas por prioridad</p>
+      </div>
+      <input class="search" placeholder="🔎 Buscar expediente...">
+    </div>
+
+    <div class="email">
+      <div><span class="status red">● Urgente</span></div>
+      <div class="sender">Carlos García</div>
+      <div>
+        <div class="subject">Solicitud de actuación procesal</div>
+        <div class="procedure">Procedimiento 1234/2026</div>
+      </div>
+      <button class="action-button" onclick="openReview()">Revisar →</button>
+    </div>
+
+    <div class="email">
+      <div><span class="status orange">● Revisar</span></div>
+      <div class="sender">Marta López</div>
+      <div>
+        <div class="subject">Resolución recibida del juzgado</div>
+        <div class="procedure">Procedimiento 842/2026</div>
+      </div>
+      <button class="action-button" onclick="openReview()">Revisar →</button>
+    </div>
+
+    <div class="email">
+      <div><span class="status green">● Informativo</span></div>
+      <div class="sender">Javier Martínez</div>
+      <div>
+        <div class="subject">Documentación recibida</div>
+        <div class="procedure">Procedimiento 557/2026</div>
+      </div>
+      <button class="action-button" onclick="openReview()">Ver →</button>
+    </div>
+
+  </section>
+</div>
+
+
+<!-- REVISIÓN -->
+<div id="reviewPage" class="review-page">
+
+  <button class="back" onclick="showHome()">← Volver a comunicaciones</button>
+
+  <div class="topbar">
+    <div>
+      <span class="badge">● PRIORIDAD ALTA</span>
+      <h1>Solicitud de actuación procesal</h1>
+      <p class="subtitle">Procedimiento 1234/2026</p>
+    </div>
+  </div>
+
+  <div class="review-grid">
+
+    <div>
+
+      <div class="panel">
+        <div class="ai-label">✨ Análisis de ProcurAI</div>
+        <h2>Resumen</h2>
+
+        <div class="ai-box">
+          El letrado comunica la recepción de una resolución relacionada
+          con el procedimiento 1234/2026 y solicita revisar la documentación
+          antes de proceder con la presentación correspondiente.
+        </div>
       </div>
 
-      <div class="profile">
-        ⚖️ Despacho
+      <div class="panel">
+        <div class="ai-label">⚡ Detectado automáticamente</div>
+        <h2>Acciones sugeridas</h2>
+
+        <ul class="action-list">
+          <li>Revisar la documentación adjunta.</li>
+          <li>Comprobar el expediente 1234/2026.</li>
+          <li>Confirmar al letrado la recepción.</li>
+          <li>Preparar respuesta por email.</li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <div class="ai-label">✍️ Preparado por ProcurAI</div>
+        <h2>Borrador de respuesta</h2>
+
+        <textarea class="draft">Buenos días, Carlos:
+
+He recibido la documentación relativa al procedimiento 1234/2026.
+
+Procedo a revisarla y te confirmaré la actuación correspondiente.
+
+Un saludo.</textarea>
+
+        <div class="buttons">
+          <button class="secondary">Guardar borrador</button>
+          <button class="primary" onclick="createDraft()">Crear borrador en Outlook</button>
+        </div>
+
+        <p id="draftMessage" class="small"></p>
       </div>
 
     </div>
 
 
-    <section class="stats">
+    <div>
 
-      <div class="card">
-        <div class="card-title">📩 Comunicaciones nuevas</div>
-        <div class="number">57</div>
-        <div class="small">Analizadas por ProcurAI</div>
-      </div>
+      <div class="panel">
+        <h2>Información</h2>
 
-      <div class="card">
-        <div class="card-title">✍️ Requieren respuesta</div>
-        <div class="number">24</div>
-        <div class="small">Borrador preparado</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">🔴 Prioridad alta</div>
-        <div class="number">6</div>
-        <div class="small">Revisar primero</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">⏱ Tiempo ahorrado hoy</div>
-        <div class="number">1h 42m</div>
-        <div class="small">Estimación de ProcurAI</div>
-      </div>
-
-    </section>
-
-
-    <section class="inbox">
-
-      <div class="inbox-header">
-
-        <div>
-          <h2>Bandeja inteligente ✨</h2>
-          <p class="small">Comunicaciones organizadas por prioridad</p>
+        <div class="info-row">
+          <span class="info-label">Remitente</span>
+          <span class="info-value">Carlos García</span>
         </div>
 
-        <input
-          class="search"
-          placeholder="🔎 Buscar expediente..."
-        >
+        <div class="info-row">
+          <span class="info-label">Expediente</span>
+          <span class="info-value">1234/2026</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-label">Tipo</span>
+          <span class="info-value">Solicitud de actuación</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-label">Estado</span>
+          <span class="info-value">Pendiente</span>
+        </div>
 
       </div>
 
+      <div class="panel">
+        <h2>📂 Expediente relacionado</h2>
+        <p><strong>1234/2026</strong></p>
+        <p class="small">Detectado automáticamente en la comunicación.</p>
 
-      <div class="email">
-
-        <div>
-          <span class="status red">● Urgente</span>
-        </div>
-
-        <div class="sender">
-          Carlos García
-        </div>
-
-        <div>
-          <div class="subject">
-            Solicitud de actuación procesal
-          </div>
-          <div class="procedure">
-            Procedimiento 1234/2026
-          </div>
-        </div>
-
-        <button class="action-button">
-          Revisar →
+        <button class="secondary" style="margin-top:18px">
+          Abrir expediente →
         </button>
-
       </div>
 
+    </div>
 
-      <div class="email">
-
-        <div>
-          <span class="status orange">● Revisar</span>
-        </div>
-
-        <div class="sender">
-          Marta López
-        </div>
-
-        <div>
-          <div class="subject">
-            Resolución recibida del juzgado
-          </div>
-          <div class="procedure">
-            Procedimiento 842/2026
-          </div>
-        </div>
-
-        <button class="action-button">
-          Revisar →
-        </button>
-
-      </div>
-
-
-      <div class="email">
-
-        <div>
-          <span class="status green">● Informativo</span>
-        </div>
-
-        <div class="sender">
-          Javier Martínez
-        </div>
-
-        <div>
-          <div class="subject">
-            Documentación recibida
-          </div>
-          <div class="procedure">
-            Procedimiento 557/2026
-          </div>
-        </div>
-
-        <button class="action-button">
-          Ver →
-        </button>
-
-      </div>
-
-    </section>
-
-  </main>
-
+  </div>
 </div>
+
+</main>
+</div>
+
+<script>
+function openReview(){
+  document.getElementById("homePage").style.display="none";
+  document.getElementById("reviewPage").style.display="block";
+  window.scrollTo(0,0);
+}
+
+function showHome(){
+  document.getElementById("reviewPage").style.display="none";
+  document.getElementById("homePage").style.display="block";
+  window.scrollTo(0,0);
+}
+
+function createDraft(){
+  const message = document.getElementById("draftMessage");
+  message.innerHTML = "✓ Borrador preparado. La conexión real con Outlook se añadirá en el siguiente módulo.";
+}
+</script>
 
 </body>
 </html>
