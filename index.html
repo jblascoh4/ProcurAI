@@ -2459,5 +2459,236 @@ comprobarSesion();
   mount();
 })();
 </script>
+ <script>
+(() => {
+  const home = document.getElementById("homePage");
+  if (!home || home.dataset.inicioReal) return;
+  home.dataset.inicioReal = "yes";
+
+  const menu = [...document.querySelectorAll(".menu-item")];
+
+  home.innerHTML = `
+    <div class="topbar">
+      <div>
+        <h1>Tu despacho</h1>
+        <p class="subtitle">Resumen de tus datos guardados.</p>
+      </div>
+      <button class="secondary" data-refresh>
+        Actualizar
+      </button>
+    </div>
+
+    <section class="stats">
+      <div class="card">
+        <div class="card-title">📂 Expedientes</div>
+        <div class="number" data-number>—</div>
+        <div class="small">Total guardados</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📄 Documentos PDF</div>
+        <div class="number" data-number>—</div>
+        <div class="small">Adjuntos a tus expedientes</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✓ Tareas pendientes</div>
+        <div class="number" data-number>—</div>
+        <div class="small">Sin completar</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✍️ Borradores</div>
+        <div class="number" data-number>—</div>
+        <div class="small">Guardados en ProcurAI</div>
+      </div>
+    </section>
+
+    <p class="small" data-status role="status"
+      aria-live="polite" style="margin-bottom:20px"></p>
+
+    <section class="panel">
+      <h2>Tareas pendientes</h2>
+      <p class="small" style="margin-bottom:16px">
+        Primero las fechas más próximas.
+        Las fechas se introducen manualmente.
+      </p>
+      <div data-tasks></div>
+      <button class="secondary" data-go-tasks
+        style="margin-top:18px">Ver todas las tareas</button>
+    </section>
+
+    <section class="panel">
+      <h2>Accesos rápidos</h2>
+      <div class="buttons" style="flex-wrap:wrap">
+        <button class="secondary" data-go-exp>
+          Expedientes y PDF
+        </button>
+        <button class="secondary" data-go-drafts>
+          Borradores
+        </button>
+      </div>
+    </section>
+
+    <section class="inbox">
+      <div class="inbox-header">
+        <div>
+          <h2>Comunicaciones</h2>
+          <p class="small">
+            Outlook todavía no está conectado.
+          </p>
+        </div>
+        <input class="search"
+          aria-label="Buscar comunicaciones"
+          placeholder="Buscar comunicaciones...">
+      </div>
+      <p style="padding:24px;color:#777;line-height:1.6">
+        Aún no se han importado correos ni notificaciones.
+        En Comunicaciones puedes usar el lector de PDF.
+      </p>
+    </section>
+  `;
+
+  const numbers = [...home.querySelectorAll("[data-number]")];
+  const status = home.querySelector("[data-status]");
+  const tasks = home.querySelector("[data-tasks]");
+  const refreshButton = home.querySelector("[data-refresh]");
+  let generation = 0;
+
+  home.querySelector("[data-go-tasks]").onclick =
+    () => menu[4]?.click();
+
+  home.querySelector("[data-go-exp]").onclick =
+    () => menu[2]?.click();
+
+  home.querySelector("[data-go-drafts]").onclick =
+    () => menu[3]?.click();
+
+  async function refresh() {
+    const current = ++generation;
+
+    refreshButton.disabled = true;
+    numbers.forEach(el => el.textContent = "—");
+    tasks.replaceChildren();
+    status.textContent = "Actualizando resumen…";
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await db.auth.getSession();
+
+      if (current !== generation) return;
+      if (sessionError) throw sessionError;
+
+      if (!sessionData.session) {
+        status.textContent = "Inicia sesión para ver tus datos.";
+        return;
+      }
+
+      const results = await Promise.all([
+        db.from("procurai_expedientes")
+          .select("id", { count: "exact", head: true }),
+
+        db.from("procurai_documentos")
+          .select("id", { count: "exact", head: true }),
+
+        db.from("procurai_tareas")
+          .select("id", { count: "exact", head: true })
+          .eq("completada", false),
+
+        db.from("procurai_borradores")
+          .select("id", { count: "exact", head: true }),
+
+        db.from("procurai_tareas")
+          .select(
+            "id,titulo,fecha,procurai_expedientes(numero,cliente)"
+          )
+          .eq("completada", false)
+          .order("fecha", {
+            ascending: true,
+            nullsFirst: false
+          })
+          .order("creado_en", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(6)
+      ]);
+
+      if (current !== generation) return;
+
+      for (const result of results) {
+        if (result.error) throw result.error;
+      }
+
+      numbers.forEach((el, index) => {
+        el.textContent = String(results[index].count ?? 0);
+      });
+
+      const pending = results[4].data || [];
+
+      if (!pending.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "No tienes tareas pendientes.";
+        tasks.appendChild(empty);
+      }
+
+      for (const task of pending) {
+        const row = document.createElement("div");
+        row.style.cssText =
+          "padding:16px 0;border-bottom:1px solid #eee";
+
+        const heading = document.createElement("strong");
+        heading.textContent = task.titulo;
+
+        const detail = document.createElement("p");
+        detail.className = "small";
+
+        const exp = task.procurai_expedientes;
+        const date = task.fecha
+          ? task.fecha.split("-").reverse().join("/")
+          : "Sin fecha";
+
+        detail.textContent =
+          (exp ? exp.numero : "Expediente")
+          + (exp?.cliente ? " · " + exp.cliente : "")
+          + " · " + date;
+
+        row.append(heading, detail);
+        tasks.appendChild(row);
+      }
+
+      const time = new Intl.DateTimeFormat("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date());
+
+      status.textContent = "Resumen actualizado a las " + time + ".";
+    } catch (error) {
+      if (current !== generation) return;
+
+      status.textContent =
+        "No se pudo cargar el resumen: " + error.message
+        + ". Pulsa Actualizar para volver a intentarlo.";
+    } finally {
+      if (current === generation) {
+        refreshButton.disabled = false;
+      }
+    }
+  }
+
+  refreshButton.onclick = refresh;
+
+  const previousHome = window.showHome;
+  window.showHome = function (...args) {
+    const result = previousHome.apply(this, args);
+    refresh();
+    return result;
+  };
+
+  db.auth.onAuthStateChange(() => {
+    setTimeout(refresh, 0);
+  });
+
+  refresh();
+})();
+</script>
 </body>
 </html>
