@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
     // Acceso limitado a tu cuenta durante las pruebas.
     if (
       !user.id ||
-      (user.email || "").toLowerCase() !== "jblascoh4@gmail.com"
+      (user.email || "").toLowerCase() !== "blascoherrerojacobo@gmail.com"
     ) {
       return res.status(403).json({
         error: "Esta cuenta no tiene acceso al análisis de prueba."
