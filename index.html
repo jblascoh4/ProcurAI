@@ -932,5 +932,288 @@ comprobarSesion();
   connectAnalysis();
 })();
 </script>
+ <script>
+(() => {
+  function mount() {
+    const title = [...document.querySelectorAll("main h1")]
+      .find(el => el.textContent.trim() === "Expedientes");
+    if (!title) return;
+
+    const page = title.closest(".topbar").parentElement;
+    if (page.querySelector("[data-expedientes-reales]")) return;
+
+    const root = document.createElement("section");
+    root.className = "panel";
+    root.dataset.expedientesReales = "yes";
+    root.innerHTML = '<h2 data-heading>Nuevo expediente</h2>' +
+      '<form><fieldset style="border:0" disabled>' +
+      '<div data-fields style="display:grid;gap:12px"></div>' +
+      '<div class="buttons">' +
+      '<button class="primary">Guardar expediente</button>' +
+      '<button type="button" class="secondary" data-new>' +
+      'Nuevo / cancelar edición</button></div>' +
+      '</fieldset></form>' +
+      '<p role="status" aria-live="polite" data-status class="small"></p>' +
+      '<hr style="border:0;border-top:1px solid #eee;margin:24px 0">' +
+      '<h2>Expedientes guardados</h2>' +
+      '<p data-info class="small"></p><div data-list></div>' +
+      '<div class="buttons">' +
+      '<button class="secondary" data-prev>Anterior</button>' +
+      '<button class="secondary" data-next>Siguiente</button></div>';
+
+    const old = page.querySelector(".panel");
+    if (old) old.replaceWith(root);
+    else page.appendChild(root);
+
+    page.querySelector(".subtitle").textContent =
+      "Expedientes guardados en tu despacho.";
+
+    const form = root.querySelector("form");
+    const fieldset = root.querySelector("fieldset");
+    const status = root.querySelector("[data-status]");
+    const list = root.querySelector("[data-list]");
+    const info = root.querySelector("[data-info]");
+    const prev = root.querySelector("[data-prev]");
+    const next = root.querySelector("[data-next]");
+    const heading = root.querySelector("[data-heading]");
+    const controls = {};
+
+    const fields = [
+      ["numero", "Número o referencia interna *", 100],
+      ["cliente", "Cliente", 300],
+      ["juzgado", "Juzgado", 300],
+      ["abogado", "Abogado", 300],
+      ["estado", "Estado", 0],
+      ["notas", "Notas", 20000]
+    ];
+
+    for (const [name, label, max] of fields) {
+      const wrapper = document.createElement("label");
+      wrapper.textContent = label;
+      wrapper.style.display = "grid";
+      wrapper.style.gap = "6px";
+
+      const control = document.createElement(
+        name === "estado" ? "select" :
+        name === "notas" ? "textarea" : "input"
+      );
+      control.name = name;
+      control.style.cssText =
+        "width:100%;padding:12px;border:1px solid #ddd;border-radius:10px";
+
+      if (max) control.maxLength = max;
+      if (name === "numero") control.required = true;
+      if (name === "notas") control.rows = 3;
+
+      if (name === "estado") {
+        for (const [value, text] of [
+          ["abierto", "Abierto"],
+          ["en_curso", "En curso"],
+          ["cerrado", "Cerrado"]
+        ]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = text;
+          control.appendChild(option);
+        }
+      }
+
+      wrapper.appendChild(control);
+      root.querySelector("[data-fields]").appendChild(wrapper);
+      controls[name] = control;
+    }
+
+    let despacho;
+    let editing = null;
+    let offset = 0;
+    let loading = false;
+    const size = 25;
+    prev.disabled = next.disabled = true;
+
+    function reset() {
+      editing = null;
+      form.reset();
+      heading.textContent = "Nuevo expediente";
+    }
+
+    root.querySelector("[data-new]").onclick = () => {
+      reset();
+      status.textContent = "";
+    };
+
+    async function load() {
+      loading = true;
+      fieldset.disabled = true;
+      prev.disabled = next.disabled = true;
+      info.textContent = "Cargando expedientes…";
+      list.replaceChildren();
+
+      try {
+        const { data, error, count } = await db
+          .from("procurai_expedientes")
+          .select("*", { count: "exact" })
+          .eq("despacho_id", despacho)
+          .order("creado_en", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + size - 1);
+
+        if (error) throw error;
+
+        info.textContent = count
+          ? (offset + 1) + "–" + (offset + data.length) + " de " + count
+          : "Todavía no hay expedientes. Crea el primero con el formulario.";
+
+        for (const row of data) {
+          const card = document.createElement("div");
+          card.style.cssText =
+            "padding:16px 0;border-bottom:1px solid #eee";
+
+          const name = document.createElement("strong");
+          name.textContent = row.numero +
+            (row.cliente ? " · " + row.cliente : "");
+
+          const detail = document.createElement("p");
+          detail.className = "small";
+          detail.textContent = [
+            row.juzgado,
+            row.abogado,
+            {
+              abierto: "Abierto",
+              en_curso: "En curso",
+              cerrado: "Cerrado"
+            }[row.estado]
+          ].filter(Boolean).join(" · ");
+
+          const edit = document.createElement("button");
+          edit.className = "secondary";
+          edit.textContent = "Abrir / editar";
+          edit.style.marginTop = "10px";
+
+          edit.onclick = () => {
+            if (loading || fieldset.disabled) return;
+            editing = row.id;
+
+            for (const [key] of fields) {
+              controls[key].value = row[key] || "";
+            }
+
+            heading.textContent = "Editar expediente";
+            status.textContent = "";
+            controls.numero.focus();
+            root.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+          };
+
+          card.append(name, detail, edit);
+          list.appendChild(card);
+        }
+
+        prev.disabled = offset === 0;
+        next.disabled = offset + size >= count;
+      } catch (error) {
+        info.textContent =
+          "No se pudieron cargar los expedientes: " + error.message;
+      } finally {
+        loading = false;
+        fieldset.disabled = false;
+      }
+    }
+
+    prev.onclick = () => {
+      if (!loading && offset > 0) {
+        offset -= size;
+        load();
+      }
+    };
+
+    next.onclick = () => {
+      if (!loading && !next.disabled) {
+        offset += size;
+        load();
+      }
+    };
+
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (!despacho || loading || fieldset.disabled) return;
+
+      const payload = {};
+      for (const [key] of fields) {
+        payload[key] = controls[key].value.trim();
+      }
+
+      if (!payload.numero) {
+        status.textContent = "Escribe una referencia.";
+        return;
+      }
+
+      fieldset.disabled = true;
+      prev.disabled = next.disabled = true;
+      status.textContent = "Guardando…";
+
+      try {
+        const query = editing
+          ? db.from("procurai_expedientes")
+              .update(payload)
+              .eq("id", editing)
+              .eq("despacho_id", despacho)
+          : db.from("procurai_expedientes")
+              .insert({ ...payload, despacho_id: despacho });
+
+        const { error } = await query.select("id").single();
+        if (error) throw error;
+
+        reset();
+        offset = 0;
+        status.textContent = "Expediente guardado.";
+        await load();
+      } catch (error) {
+        status.textContent = error.code === "23505"
+          ? "Ya existe esa referencia en este despacho. Usa otra o edita el expediente existente."
+          : "No se pudo guardar: " + error.message;
+
+        fieldset.disabled = false;
+        prev.disabled = offset === 0;
+        next.disabled = true;
+      }
+    };
+
+    (async () => {
+      try {
+        const { data, error } = await db
+          .from("procurai_despachos")
+          .select("id,nombre")
+          .order("creado_en")
+          .limit(2);
+
+        if (error) throw error;
+
+        if (data.length !== 1) {
+          throw new Error(
+            data.length
+              ? "Hay varios despachos. Falta configurar su selector."
+              : "Tu cuenta todavía no tiene acceso a un despacho."
+          );
+        }
+
+        despacho = data[0].id;
+        page.querySelector(".subtitle").textContent = data[0].nombre;
+        await load();
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    })();
+  }
+
+  new MutationObserver(mount).observe(
+    document.querySelector("main"),
+    { childList: true, subtree: true }
+  );
+
+  mount();
+})();
+</script>
 </body>
 </html>
