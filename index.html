@@ -1215,5 +1215,601 @@ comprobarSesion();
   mount();
 })();
 </script>
+ <script>
+(() => {
+  function mount() {
+    const root = document.querySelector("[data-expedientes-reales]");
+    if (!root || root.dataset.documentsConnected) return;
+    root.dataset.documentsConnected = "yes";
+
+    const box = document.createElement("section");
+    box.hidden = true;
+    box.style.cssText =
+      "margin-top:28px;padding-top:20px;border-top:1px solid #eee";
+
+    box.innerHTML =
+      '<h2>Documentos del expediente</h2>' +
+      '<p data-ref class="small"></p>' +
+      '<input type="file" accept=".pdf,application/pdf" ' +
+      'aria-label="Seleccionar PDF" style="margin:16px 0">' +
+      '<button class="primary" data-upload>Adjuntar PDF</button>' +
+      '<p role="status" aria-live="polite" class="small" data-message></p>' +
+      '<p class="small" data-count></p><div data-documents></div>' +
+      '<div class="buttons">' +
+      '<button class="secondary" data-back>Anterior</button>' +
+      '<button class="secondary" data-forward>Siguiente</button></div>';
+
+    root.appendChild(box);
+
+    const fileInput = box.querySelector("input");
+    const upload = box.querySelector("[data-upload]");
+    const message = box.querySelector("[data-message]");
+    const list = box.querySelector("[data-documents]");
+    const countLabel = box.querySelector("[data-count]");
+    const back = box.querySelector("[data-back]");
+    const forward = box.querySelector("[data-forward]");
+
+    let expediente = null;
+    let generation = 0;
+    let offset = 0;
+    let busy = false;
+
+    async function loadFiles() {
+      const current = generation;
+      if (!expediente) return;
+      const id = expediente.id;
+
+      back.disabled = forward.disabled = true;
+      list.replaceChildren();
+      countLabel.textContent = "Cargando documentos…";
+
+      try {
+        const { data, error, count } = await db
+          .from("procurai_documentos")
+          .select("*", { count: "exact" })
+          .eq("expediente_id", id)
+          .order("creado_en", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + 24);
+
+        if (current !== generation) return;
+        if (error) throw error;
+
+        countLabel.textContent = count
+          ? (offset + 1) + "–" + (offset + data.length) +
+            " de " + count + " documentos"
+          : "Este expediente aún no tiene documentos.";
+
+        for (const doc of data) {
+          const row = document.createElement("div");
+          row.style.cssText =
+            "padding:14px 0;border-bottom:1px solid #eee";
+
+          const name = document.createElement("p");
+          name.textContent = doc.nombre + " · " +
+            (doc.tamano_bytes / 1024 / 1024).toFixed(2) + " MB";
+
+          const download = document.createElement("button");
+          download.className = "secondary";
+          download.textContent = "Descargar PDF";
+
+          download.onclick = async () => {
+            download.disabled = true;
+            try {
+              const { data, error } = await db.storage
+                .from("procurai-pdfs").download(doc.ruta);
+
+              if (error) throw error;
+
+              const url = URL.createObjectURL(data);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = doc.nombre.replace(/[\\/:*?"<>|]/g, "_");
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (error) {
+              if (current === generation) {
+                message.textContent =
+                  "No se pudo descargar: " + error.message;
+              }
+            } finally {
+              download.disabled = false;
+            }
+          };
+
+          row.append(name, download);
+          list.appendChild(row);
+        }
+
+        back.disabled = offset === 0;
+        forward.disabled = offset + 25 >= count;
+      } catch (error) {
+        if (current === generation) {
+          countLabel.textContent =
+            "No se pudieron cargar: " + error.message;
+        }
+      }
+    }
+
+    back.onclick = () => {
+      if (!back.disabled) {
+        offset -= 25;
+        loadFiles();
+      }
+    };
+
+    forward.onclick = () => {
+      if (!forward.disabled) {
+        offset += 25;
+        loadFiles();
+      }
+    };
+
+    function close() {
+      generation++;
+      expediente = null;
+      box.hidden = true;
+      fileInput.value = "";
+      list.replaceChildren();
+    }
+
+    root.addEventListener("click", async event => {
+      const button = event.target.closest("button");
+      if (!button) return;
+
+      if (button.matches("[data-new]")) {
+        close();
+        return;
+      }
+
+      if (button.textContent.trim() !== "Abrir / editar") return;
+      if (root.querySelector("fieldset").disabled) return;
+
+      close();
+      const current = generation;
+      const numero = root.querySelector("form")
+        .elements.namedItem("numero").value;
+
+      box.hidden = false;
+      upload.disabled = true;
+      message.textContent = "Abriendo documentos…";
+
+      try {
+        const { data: desks, error: deskError } = await db
+          .from("procurai_despachos").select("id").limit(2);
+
+        if (deskError) throw deskError;
+        if (desks.length !== 1) {
+          throw new Error("No se pudo identificar el despacho.");
+        }
+
+        const { data, error } = await db
+          .from("procurai_expedientes")
+          .select("id,numero")
+          .eq("numero", numero)
+          .eq("despacho_id", desks[0].id)
+          .single();
+
+        if (current !== generation) return;
+        if (error) throw error;
+
+        expediente = data;
+        offset = 0;
+
+        box.querySelector("[data-ref]").textContent =
+          "Referencia: " + data.numero + " · PDF de hasta 20 MB";
+
+        message.textContent = "";
+        upload.disabled = busy;
+        await loadFiles();
+      } catch (error) {
+        if (current === generation) {
+          message.textContent = error.message;
+        }
+      }
+    });
+
+    root.querySelector("form").addEventListener("submit", close);
+
+    upload.onclick = async () => {
+      const file = fileInput.files[0];
+      if (!expediente || busy) return;
+
+      if (!file) {
+        message.textContent = "Selecciona primero un PDF.";
+        return;
+      }
+
+      if (
+        !file.name.toLowerCase().endsWith(".pdf") ||
+        !file.size ||
+        file.size > 20971520
+      ) {
+        message.textContent = "Elige un PDF de entre 1 byte y 20 MB.";
+        return;
+      }
+
+      const current = generation;
+      const target = expediente.id;
+
+      busy = true;
+      upload.disabled = true;
+      fileInput.disabled = true;
+      message.textContent = "Subiendo PDF…";
+
+      let path;
+      let uploaded = false;
+      let registered = false;
+
+      try {
+        const header = new TextDecoder().decode(
+          await file.slice(0, 1024).arrayBuffer()
+        );
+
+        if (!header.includes("%PDF-")) {
+          throw new Error("El archivo no parece un PDF válido.");
+        }
+
+        const id = crypto.randomUUID();
+        path = target + "/" + id + ".pdf";
+
+        const { error: uploadError } = await db.storage
+          .from("procurai-pdfs")
+          .upload(path, file, {
+            contentType: "application/pdf",
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+        uploaded = true;
+
+        const { error } = await db
+          .from("procurai_documentos")
+          .insert({
+            id,
+            expediente_id: target,
+            nombre: file.name.slice(0, 255),
+            ruta: path,
+            tamano_bytes: file.size
+          })
+          .select("id").single();
+
+        if (error) throw error;
+        registered = true;
+
+        if (current !== generation) return;
+
+        fileInput.value = "";
+        offset = 0;
+        message.textContent = "PDF guardado en el expediente.";
+        await loadFiles();
+      } catch (error) {
+        if (uploaded && !registered) {
+          try {
+            await db.storage.from("procurai-pdfs").remove([path]);
+          } catch {}
+        }
+
+        if (current === generation) {
+          message.textContent =
+            "No se pudo confirmar el guardado: " + error.message +
+            ". Vuelve a abrir el expediente antes de repetir la subida.";
+        }
+      } finally {
+        busy = false;
+        fileInput.disabled = false;
+        upload.disabled = !expediente;
+      }
+    };
+  }
+
+  new MutationObserver(mount).observe(
+    document.querySelector("main"),
+    { childList: true, subtree: true }
+  );
+
+  mount();
+})();
+</script>
+ <script>
+(() => {
+  function mount() {
+    const root = document.querySelector("[data-expedientes-reales]");
+    if (!root || root.dataset.documentsConnected) return;
+    root.dataset.documentsConnected = "yes";
+
+    const box = document.createElement("section");
+    box.hidden = true;
+    box.style.cssText =
+      "margin-top:28px;padding-top:20px;border-top:1px solid #eee";
+
+    box.innerHTML =
+      '<h2>Documentos del expediente</h2>' +
+      '<p data-ref class="small"></p>' +
+      '<input type="file" accept=".pdf,application/pdf" ' +
+      'aria-label="Seleccionar PDF" style="margin:16px 0">' +
+      '<button class="primary" data-upload>Adjuntar PDF</button>' +
+      '<p role="status" aria-live="polite" class="small" data-message></p>' +
+      '<p class="small" data-count></p><div data-documents></div>' +
+      '<div class="buttons">' +
+      '<button class="secondary" data-back>Anterior</button>' +
+      '<button class="secondary" data-forward>Siguiente</button></div>';
+
+    root.appendChild(box);
+
+    const fileInput = box.querySelector("input");
+    const upload = box.querySelector("[data-upload]");
+    const message = box.querySelector("[data-message]");
+    const list = box.querySelector("[data-documents]");
+    const countLabel = box.querySelector("[data-count]");
+    const back = box.querySelector("[data-back]");
+    const forward = box.querySelector("[data-forward]");
+
+    let expediente = null;
+    let generation = 0;
+    let offset = 0;
+    let busy = false;
+
+    async function loadFiles() {
+      const current = generation;
+      if (!expediente) return;
+      const id = expediente.id;
+
+      back.disabled = forward.disabled = true;
+      list.replaceChildren();
+      countLabel.textContent = "Cargando documentos…";
+
+      try {
+        const { data, error, count } = await db
+          .from("procurai_documentos")
+          .select("*", { count: "exact" })
+          .eq("expediente_id", id)
+          .order("creado_en", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + 24);
+
+        if (current !== generation) return;
+        if (error) throw error;
+
+        countLabel.textContent = count
+          ? (offset + 1) + "–" + (offset + data.length) +
+            " de " + count + " documentos"
+          : "Este expediente aún no tiene documentos.";
+
+        for (const doc of data) {
+          const row = document.createElement("div");
+          row.style.cssText =
+            "padding:14px 0;border-bottom:1px solid #eee";
+
+          const name = document.createElement("p");
+          name.textContent = doc.nombre + " · " +
+            (doc.tamano_bytes / 1024 / 1024).toFixed(2) + " MB";
+
+          const download = document.createElement("button");
+          download.className = "secondary";
+          download.textContent = "Descargar PDF";
+
+          download.onclick = async () => {
+            download.disabled = true;
+            try {
+              const { data, error } = await db.storage
+                .from("procurai-pdfs").download(doc.ruta);
+
+              if (error) throw error;
+
+              const url = URL.createObjectURL(data);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = doc.nombre.replace(/[\\/:*?"<>|]/g, "_");
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (error) {
+              if (current === generation) {
+                message.textContent =
+                  "No se pudo descargar: " + error.message;
+              }
+            } finally {
+              download.disabled = false;
+            }
+          };
+
+          row.append(name, download);
+          list.appendChild(row);
+        }
+
+        back.disabled = offset === 0;
+        forward.disabled = offset + 25 >= count;
+      } catch (error) {
+        if (current === generation) {
+          countLabel.textContent =
+            "No se pudieron cargar: " + error.message;
+        }
+      }
+    }
+
+    back.onclick = () => {
+      if (!back.disabled) {
+        offset -= 25;
+        loadFiles();
+      }
+    };
+
+    forward.onclick = () => {
+      if (!forward.disabled) {
+        offset += 25;
+        loadFiles();
+      }
+    };
+
+    function close() {
+      generation++;
+      expediente = null;
+      box.hidden = true;
+      fileInput.value = "";
+      list.replaceChildren();
+    }
+
+    root.addEventListener("click", async event => {
+      const button = event.target.closest("button");
+      if (!button) return;
+
+      if (button.matches("[data-new]")) {
+        close();
+        return;
+      }
+
+      if (button.textContent.trim() !== "Abrir / editar") return;
+      if (root.querySelector("fieldset").disabled) return;
+
+      close();
+      const current = generation;
+      const numero = root.querySelector("form")
+        .elements.namedItem("numero").value;
+
+      box.hidden = false;
+      upload.disabled = true;
+      message.textContent = "Abriendo documentos…";
+
+      try {
+        const { data: desks, error: deskError } = await db
+          .from("procurai_despachos").select("id").limit(2);
+
+        if (deskError) throw deskError;
+        if (desks.length !== 1) {
+          throw new Error("No se pudo identificar el despacho.");
+        }
+
+        const { data, error } = await db
+          .from("procurai_expedientes")
+          .select("id,numero")
+          .eq("numero", numero)
+          .eq("despacho_id", desks[0].id)
+          .single();
+
+        if (current !== generation) return;
+        if (error) throw error;
+
+        expediente = data;
+        offset = 0;
+
+        box.querySelector("[data-ref]").textContent =
+          "Referencia: " + data.numero + " · PDF de hasta 20 MB";
+
+        message.textContent = "";
+        upload.disabled = busy;
+        await loadFiles();
+      } catch (error) {
+        if (current === generation) {
+          message.textContent = error.message;
+        }
+      }
+    });
+
+    root.querySelector("form").addEventListener("submit", close);
+
+    upload.onclick = async () => {
+      const file = fileInput.files[0];
+      if (!expediente || busy) return;
+
+      if (!file) {
+        message.textContent = "Selecciona primero un PDF.";
+        return;
+      }
+
+      if (
+        !file.name.toLowerCase().endsWith(".pdf") ||
+        !file.size ||
+        file.size > 20971520
+      ) {
+        message.textContent = "Elige un PDF de entre 1 byte y 20 MB.";
+        return;
+      }
+
+      const current = generation;
+      const target = expediente.id;
+
+      busy = true;
+      upload.disabled = true;
+      fileInput.disabled = true;
+      message.textContent = "Subiendo PDF…";
+
+      let path;
+      let uploaded = false;
+      let registered = false;
+
+      try {
+        const header = new TextDecoder().decode(
+          await file.slice(0, 1024).arrayBuffer()
+        );
+
+        if (!header.includes("%PDF-")) {
+          throw new Error("El archivo no parece un PDF válido.");
+        }
+
+        const id = crypto.randomUUID();
+        path = target + "/" + id + ".pdf";
+
+        const { error: uploadError } = await db.storage
+          .from("procurai-pdfs")
+          .upload(path, file, {
+            contentType: "application/pdf",
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+        uploaded = true;
+
+        const { error } = await db
+          .from("procurai_documentos")
+          .insert({
+            id,
+            expediente_id: target,
+            nombre: file.name.slice(0, 255),
+            ruta: path,
+            tamano_bytes: file.size
+          })
+          .select("id").single();
+
+        if (error) throw error;
+        registered = true;
+
+        if (current !== generation) return;
+
+        fileInput.value = "";
+        offset = 0;
+        message.textContent = "PDF guardado en el expediente.";
+        await loadFiles();
+      } catch (error) {
+        if (uploaded && !registered) {
+          try {
+            await db.storage.from("procurai-pdfs").remove([path]);
+          } catch {}
+        }
+
+        if (current === generation) {
+          message.textContent =
+            "No se pudo confirmar el guardado: " + error.message +
+            ". Vuelve a abrir el expediente antes de repetir la subida.";
+        }
+      } finally {
+        busy = false;
+        fileInput.disabled = false;
+        upload.disabled = !expediente;
+      }
+    };
+  }
+
+  new MutationObserver(mount).observe(
+    document.querySelector("main"),
+    { childList: true, subtree: true }
+  );
+
+  mount();
+})();
+</script>
 </body>
 </html>
