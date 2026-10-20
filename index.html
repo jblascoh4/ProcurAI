@@ -2129,5 +2129,335 @@ comprobarSesion();
   mount();
 })();
 </script>
+ <script>
+(() => {
+  function mount() {
+    const main = document.querySelector("main");
+    const title = main && [...main.querySelectorAll("h1")]
+      .find(el => el.textContent.trim() === "Borradores");
+
+    const page = title?.closest(".topbar")?.parentElement;
+    if (!page || page.querySelector("[data-borradores-reales]")) return;
+
+    const root = document.createElement("section");
+    root.className = "panel";
+    root.dataset.borradoresReales = "yes";
+
+    root.innerHTML = `
+      <h2 data-heading>Nuevo borrador</h2>
+      <p class="small">
+        Solo se guarda en ProcurAI. No se envía ningún correo.
+      </p>
+
+      <form>
+        <fieldset disabled style="border:0;padding:0">
+          <label>
+            Expediente
+            <select name="expediente" required></select>
+          </label>
+
+          <label>
+            Correo del destinatario (opcional)
+            <input name="destinatario" type="email" maxlength="320">
+          </label>
+
+          <label>
+            Asunto
+            <input name="asunto" required maxlength="300">
+          </label>
+
+          <label>
+            Mensaje
+            <textarea name="cuerpo" rows="10"
+              maxlength="50000"></textarea>
+          </label>
+
+          <button class="primary" type="submit">
+            Guardar borrador
+          </button>
+
+          <button type="button" class="secondary" data-new>
+            Nuevo / cancelar edición
+          </button>
+        </fieldset>
+      </form>
+
+      <p data-status role="status" aria-live="polite"></p>
+
+      <hr>
+      <h2>Borradores guardados</h2>
+      <p data-count class="small"></p>
+      <div data-list></div>
+
+      <div style="display:flex;gap:12px;margin-top:16px">
+        <button type="button" class="secondary"
+          data-prev disabled>Anterior</button>
+        <button type="button" class="secondary"
+          data-next disabled>Siguiente</button>
+      </div>
+    `;
+
+    const old = page.querySelector(".panel");
+    if (old) old.replaceWith(root);
+    else page.appendChild(root);
+
+    const subtitle = title.parentElement.querySelector(".small");
+    if (subtitle) {
+      subtitle.textContent =
+        "Borradores reales vinculados a tus expedientes.";
+    }
+
+    root.querySelectorAll("label").forEach(el => {
+      el.style.cssText = "display:block;margin:14px 0";
+      el.querySelector("input,select,textarea").style.cssText =
+        "display:block;width:100%;padding:10px;margin-top:6px";
+    });
+
+    const form = root.querySelector("form");
+    const fields = form.elements;
+    const select = fields.namedItem("expediente");
+    const fieldset = root.querySelector("fieldset");
+    const heading = root.querySelector("[data-heading]");
+    const status = root.querySelector("[data-status]");
+    const list = root.querySelector("[data-list]");
+    const count = root.querySelector("[data-count]");
+    const prev = root.querySelector("[data-prev]");
+    const next = root.querySelector("[data-next]");
+
+    let editing = null;
+    let offset = 0;
+    let total = 0;
+    let busy = false;
+    let ready = false;
+
+    function lock(value) {
+      busy = value;
+      fieldset.disabled = value || !ready;
+      select.disabled = !!editing;
+      prev.disabled = value || offset === 0;
+      next.disabled = value || offset + 25 >= total;
+    }
+
+    function reset() {
+      editing = null;
+      form.reset();
+      select.disabled = false;
+      heading.textContent = "Nuevo borrador";
+    }
+
+    root.querySelector("[data-new]").onclick = () => {
+      if (busy) return;
+      reset();
+      status.textContent = "";
+    };
+
+    async function load() {
+      lock(true);
+      list.replaceChildren();
+      count.textContent = "Cargando borradores…";
+
+      try {
+        const { data, error, count: number } = await db
+          .from("procurai_borradores")
+          .select(
+            "id,expediente_id,destinatario,asunto,cuerpo,procurai_expedientes(numero,cliente)",
+            { count: "exact" }
+          )
+          .order("creado_en", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + 24);
+
+        if (error) throw error;
+
+        total = number || 0;
+        count.textContent = total
+          ? (offset + 1) + "–" + (offset + data.length)
+            + " de " + total
+          : "Todavía no hay borradores.";
+
+        for (const draft of data) {
+          const row = document.createElement("div");
+          row.style.cssText =
+            "padding:16px 0;border-bottom:1px solid #eee";
+
+          const subject = document.createElement("strong");
+          subject.textContent = draft.asunto;
+
+          const detail = document.createElement("p");
+          detail.className = "small";
+
+          const exp = draft.procurai_expedientes;
+          detail.textContent =
+            (exp ? exp.numero : "Expediente")
+            + " · Para: " + (draft.destinatario || "Sin destinatario")
+            + " · No enviado";
+
+          const preview = document.createElement("p");
+          preview.style.whiteSpace = "pre-wrap";
+          preview.textContent = draft.cuerpo.slice(0, 180)
+            + (draft.cuerpo.length > 180 ? "…" : "");
+
+          const edit = document.createElement("button");
+          edit.type = "button";
+          edit.className = "secondary";
+          edit.textContent = "Abrir / editar borrador";
+
+          edit.onclick = () => {
+            if (busy || !ready) return;
+
+            if (![...select.options].some(
+              o => o.value === draft.expediente_id
+            )) {
+              status.textContent =
+                "Recarga la página para actualizar los expedientes.";
+              return;
+            }
+
+            editing = draft.id;
+            select.value = draft.expediente_id;
+            select.disabled = true;
+
+            for (const key of ["destinatario", "asunto", "cuerpo"]) {
+              fields.namedItem(key).value = draft[key];
+            }
+
+            heading.textContent = "Editar borrador";
+            status.textContent = "";
+
+            root.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+
+            fields.namedItem("asunto").focus();
+          };
+
+          row.append(subject, detail, preview, edit);
+          list.appendChild(row);
+        }
+      } catch (error) {
+        count.textContent =
+          "No se pudieron cargar los borradores: " + error.message;
+      } finally {
+        lock(false);
+      }
+    }
+
+    prev.onclick = () => {
+      if (busy || prev.disabled) return;
+      offset = Math.max(0, offset - 25);
+      load();
+    };
+
+    next.onclick = () => {
+      if (busy || next.disabled) return;
+      offset += 25;
+      load();
+    };
+
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (busy || !ready) return;
+
+      const payload = {
+        destinatario: fields.namedItem("destinatario").value.trim(),
+        asunto: fields.namedItem("asunto").value.trim(),
+        cuerpo: fields.namedItem("cuerpo").value
+      };
+
+      if (!payload.asunto) {
+        status.textContent = "Escribe un asunto.";
+        return;
+      }
+
+      const expediente = select.value;
+      lock(true);
+      status.textContent = "Guardando borrador…";
+
+      try {
+        const query = editing
+          ? db.from("procurai_borradores")
+              .update(payload)
+              .eq("id", editing)
+              .eq("expediente_id", expediente)
+          : db.from("procurai_borradores")
+              .insert({
+                ...payload,
+                expediente_id: expediente
+              });
+
+        const { error } = await query.select("id").single();
+        if (error) throw error;
+
+        reset();
+        offset = 0;
+        status.textContent =
+          "Borrador guardado. No se ha enviado.";
+
+        await load();
+      } catch (error) {
+        status.textContent =
+          "No se pudo confirmar el guardado: " + error.message
+          + ". Revisa la lista antes de repetir.";
+
+        await load();
+      } finally {
+        lock(false);
+      }
+    };
+
+    (async () => {
+      lock(true);
+      status.textContent = "Cargando expedientes…";
+
+      try {
+        for (let start = 0; ; start += 500) {
+          const { data, error } = await db
+            .from("procurai_expedientes")
+            .select("id,numero,cliente")
+            .order("numero")
+            .order("id")
+            .range(start, start + 499);
+
+          if (error) throw error;
+
+          for (const exp of data) {
+            const option = document.createElement("option");
+            option.value = exp.id;
+            option.textContent = exp.numero
+              + (exp.cliente ? " · " + exp.cliente : "");
+            select.appendChild(option);
+          }
+
+          if (data.length < 500) break;
+        }
+
+        ready = select.options.length > 0;
+        status.textContent = ready
+          ? ""
+          : "Crea primero un expediente en Expedientes.";
+
+        await load();
+      } catch (error) {
+        status.textContent =
+          "No se pudieron cargar los expedientes: " + error.message;
+      } finally {
+        lock(false);
+      }
+    })();
+  }
+
+  const main = document.querySelector("main");
+
+  if (main) {
+    new MutationObserver(mount).observe(main, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  mount();
+})();
+</script>
 </body>
 </html>
