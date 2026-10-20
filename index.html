@@ -492,6 +492,159 @@ async function comprobarSesion() {
 comprobarSesion();
 </script>
  
+<script>
+(() => {
+  const main = document.querySelector("main");
+  const menu = [...document.querySelectorAll(".menu-item")];
+  const home = document.getElementById("homePage");
+  const review = document.getElementById("reviewPage");
 
+  const section = document.createElement("div");
+  section.hidden = true;
+  main.appendChild(section);
+
+  const originalHome = window.showHome;
+  const originalReview = window.openReview;
+
+  function activate(index) {
+    menu.forEach((item, i) => {
+      item.classList.toggle("active", i === index);
+    });
+  }
+
+  window.showHome = function () {
+    section.hidden = true;
+    originalHome();
+    activate(0);
+  };
+
+  window.openReview = function () {
+    section.hidden = true;
+    originalReview();
+    activate(1);
+  };
+
+  function openSection(index, title, content) {
+    home.style.display = "none";
+    review.style.display = "none";
+    section.hidden = false;
+    section.innerHTML = `
+      <div class="topbar">
+        <div>
+          <h1>${title}</h1>
+          <p class="subtitle">
+            Versión de prueba · Datos de ejemplo
+          </p>
+        </div>
+      </div>
+      ${content}
+    `;
+    activate(index);
+    window.scrollTo(0, 0);
+  }
+
+  function communications(index, title) {
+    openSection(index, title, "");
+    const inbox = home.querySelector(".inbox").cloneNode(true);
+    section.appendChild(inbox);
+
+    const search = inbox.querySelector("input");
+    search.placeholder = "Buscar por nombre o expediente...";
+    search.addEventListener("input", () => {
+      const query = search.value.toLocaleLowerCase();
+      inbox.querySelectorAll(".email").forEach(row => {
+        row.hidden = !row.textContent
+          .toLocaleLowerCase().includes(query);
+      });
+    });
+  }
+
+  const actions = [
+    () => showHome(),
+
+    () => communications(1, "Comunicaciones"),
+
+    () => openSection(2, "Expedientes", `
+      <div class="panel">
+        <h2>Expedientes de ejemplo</h2>
+        <p>1234/2026 · Carlos García</p><br>
+        <p>842/2026 · Marta López</p><br>
+        <p>557/2026 · Javier Martínez</p>
+        <p class="small">
+          La gestión de expedientes reales está pendiente.
+        </p>
+      </div>
+    `),
+
+    () => openSection(3, "Borradores", `
+      <div class="panel">
+        <h2>Respuesta de ejemplo</h2>
+        <p>Procedimiento 1234/2026 · Carlos García</p>
+        <button class="secondary"
+          style="margin-top:18px" onclick="openReview()">
+          Abrir borrador →
+        </button>
+        <p class="small">
+          El guardado y la conexión con Outlook están pendientes.
+        </p>
+      </div>
+    `),
+
+    () => openSection(4, "Tareas", `
+      <div class="panel">
+        <h2>Lista de prueba</h2>
+        <p><label><input type="checkbox">
+          Revisar documentación del expediente 1234/2026
+        </label></p><br>
+        <p><label><input type="checkbox">
+          Preparar respuesta al letrado
+        </label></p>
+        <p class="small">
+          Estas marcas se reinician al salir del apartado.
+        </p>
+      </div>
+    `),
+
+    () => communications(5, "Buscar"),
+
+    () => {
+      openSection(6, "Configuración", `
+        <div class="panel">
+          <h2>Sesión</h2>
+          <button class="secondary" id="logoutButton">
+            Cerrar sesión
+          </button>
+          <p id="logoutStatus" class="small"></p>
+        </div>
+      `);
+
+      document.getElementById("logoutButton").onclick =
+        async function () {
+          this.disabled = true;
+          const status = document.getElementById("logoutStatus");
+          try {
+            const { error } = await db.auth.signOut();
+            if (error) throw error;
+            location.reload();
+          } catch (error) {
+            status.textContent = error.message;
+            this.disabled = false;
+          }
+        };
+    }
+  ];
+
+  menu.forEach((item, index) => {
+    item.onclick = actions[index];
+  });
+
+  const notice = document.createElement("p");
+  notice.className = "small";
+  notice.style.marginBottom = "20px";
+  notice.textContent =
+    "Versión de prueba: cifras y comunicaciones de ejemplo.";
+  home.prepend(notice);
+})();
+</script>
 </body>
 </html>
