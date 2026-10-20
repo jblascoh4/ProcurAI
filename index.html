@@ -646,5 +646,145 @@ comprobarSesion();
   home.prepend(notice);
 })();
 </script>
+<script>
+(() => {
+  const panel = document.createElement("section");
+  panel.className = "panel";
+  panel.innerHTML = `
+    <h2>📄 Leer un PDF</h2>
+    <p class="small" style="margin-bottom:16px">
+      Selecciona un PDF para extraer su texto.
+      El documento se procesa en este navegador y no se guarda.
+    </p>
+
+    <input type="file" accept=".pdf,application/pdf"
+      aria-label="Seleccionar PDF" data-pdf-input>
+
+    <p class="small" role="status" aria-live="polite"
+      data-pdf-status style="margin:16px 0"></p>
+
+    <textarea class="draft" data-pdf-text readonly hidden
+      aria-label="Texto extraído del PDF"
+      style="min-height:320px"></textarea>
+  `;
+
+  const input = panel.querySelector("[data-pdf-input]");
+  const status = panel.querySelector("[data-pdf-status]");
+  const output = panel.querySelector("[data-pdf-text]");
+
+  let libraryPromise;
+
+  async function getReader() {
+    if (!libraryPromise) {
+      libraryPromise = import(
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.149/build/pdf.mjs"
+      ).then(reader => {
+        reader.GlobalWorkerOptions.workerSrc =
+          "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.149/build/pdf.worker.mjs";
+        return reader;
+      }).catch(error => {
+        libraryPromise = null;
+        throw error;
+      });
+    }
+    return libraryPromise;
+  }
+
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    output.value = "";
+    output.hidden = true;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      status.textContent = "Selecciona un archivo PDF.";
+      input.value = "";
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      status.textContent = "El límite de esta prueba es de 20 MB.";
+      input.value = "";
+      return;
+    }
+
+    input.disabled = true;
+    status.textContent = "Preparando la lectura…";
+    let documentPdf;
+
+    try {
+      const reader = await getReader();
+      const data = new Uint8Array(await file.arrayBuffer());
+      documentPdf = await reader.getDocument({ data }).promise;
+
+      if (documentPdf.numPages > 200) {
+        throw new Error("El límite de esta prueba es de 200 páginas.");
+      }
+
+      const pages = [];
+      let hasText = false;
+
+      for (let n = 1; n <= documentPdf.numPages; n++) {
+        status.textContent =
+          `Leyendo página ${n} de ${documentPdf.numPages}…`;
+
+        const page = await documentPdf.getPage(n);
+        const content = await page.getTextContent();
+        let text = "";
+
+        for (const item of content.items) {
+          if (typeof item.str === "string") {
+            text += item.str + (item.hasEOL ? "\n" : " ");
+          }
+        }
+
+        if (text.trim()) hasText = true;
+        pages.push(`— Página ${n} —\n${text.trim()}`);
+        page.cleanup();
+      }
+
+      if (!hasText) {
+        status.textContent =
+          "Este PDF no contiene texto extraíble. " +
+          "Puede ser un escaneo y necesitar reconocimiento de texto.";
+        return;
+      }
+
+      output.value = pages.join("\n\n");
+      output.hidden = false;
+      status.textContent =
+        `${file.name} · ${documentPdf.numPages} página(s). ` +
+        "Texto extraído. Todavía no se ha analizado con IA.";
+    } catch (error) {
+      status.textContent =
+        error.name === "PasswordException"
+          ? "El PDF está protegido con contraseña."
+          : "No se pudo leer el PDF. " + error.message;
+    } finally {
+      if (documentPdf) {
+        await documentPdf.destroy().catch(() => {});
+      }
+      input.disabled = false;
+      input.value = "";
+    }
+  });
+
+  const communications =
+    document.querySelectorAll(".menu-item")[1];
+
+  communications.addEventListener("click", () => {
+    const main = document.querySelector("main");
+    const title = [...main.querySelectorAll("h1")]
+      .find(element =>
+        element.textContent.trim() === "Comunicaciones"
+      );
+
+    if (!title) return;
+    const page = title.closest(".topbar").parentElement;
+    page.insertBefore(panel, page.children[1] || null);
+  });
+})();
+</script>
 </body>
 </html>
