@@ -2914,5 +2914,362 @@ comprobarSesion();
   mount();
 })();
 </script>
+ <script>
+(() => {
+  function mount() {
+    const root = document.querySelector("[data-tareas-reales]");
+    if (!root || root.dataset.edicionTareas) return;
+    root.dataset.edicionTareas = "yes";
+
+    root.innerHTML = `
+      <h2 data-heading>Nueva tarea</h2>
+      <p class="small">Las fechas se introducen manualmente.</p>
+
+      <form>
+        <fieldset disabled style="border:0;padding:0">
+          <label>
+            Expediente
+            <select name="expediente" required></select>
+          </label>
+
+          <label>
+            Tarea
+            <input name="titulo" required maxlength="200">
+          </label>
+
+          <label>
+            Fecha (opcional)
+            <input type="date" name="fecha">
+          </label>
+
+          <label>
+            Notas
+            <textarea name="notas"
+              maxlength="10000" rows="4"></textarea>
+          </label>
+
+          <button class="primary" type="submit">
+            Guardar tarea
+          </button>
+
+          <button class="secondary" type="button" data-new>
+            Nuevo / cancelar edición
+          </button>
+        </fieldset>
+      </form>
+
+      <p data-status role="status" aria-live="polite"
+        style="margin:16px 0"></p>
+
+      <hr>
+      <h2>Tareas guardadas</h2>
+      <p data-count class="small"></p>
+      <div data-list></div>
+
+      <div class="buttons">
+        <button type="button" class="secondary"
+          data-prev disabled>Anterior</button>
+        <button type="button" class="secondary"
+          data-next disabled>Siguiente</button>
+      </div>
+    `;
+
+    const form = root.querySelector("form");
+    const fields = form.elements;
+    const select = fields.namedItem("expediente");
+    const fieldset = root.querySelector("fieldset");
+    const heading = root.querySelector("[data-heading]");
+    const status = root.querySelector("[data-status]");
+    const list = root.querySelector("[data-list]");
+    const count = root.querySelector("[data-count]");
+    const prev = root.querySelector("[data-prev]");
+    const next = root.querySelector("[data-next]");
+
+    let editing = null;
+    let busy = false;
+    let ready = false;
+    let offset = 0;
+    let total = 0;
+
+    root.querySelectorAll("label").forEach(label => {
+      label.style.cssText = "display:block;margin:14px 0";
+      label.querySelector("input,select,textarea").style.cssText =
+        "display:block;width:100%;padding:10px;margin-top:6px";
+    });
+
+    function lock(value) {
+      busy = value;
+      fieldset.disabled = value || !ready;
+      select.disabled = !!editing;
+      prev.disabled = value || offset === 0;
+      next.disabled = value || offset + 25 >= total;
+    }
+
+    function reset() {
+      editing = null;
+      form.reset();
+      select.disabled = false;
+      heading.textContent = "Nueva tarea";
+    }
+
+    root.querySelector("[data-new]").onclick = () => {
+      if (busy) return;
+      reset();
+      status.textContent = "";
+    };
+
+    async function load() {
+      lock(true);
+      list.replaceChildren();
+      count.textContent = "Cargando tareas…";
+
+      try {
+        const { data, error, count: number } = await db
+          .from("procurai_tareas")
+          .select(
+            "id,expediente_id,titulo,fecha,notas,completada,procurai_expedientes(numero,cliente)",
+            { count: "exact" }
+          )
+          .order("creado_en", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + 24);
+
+        if (error) throw error;
+
+        total = number || 0;
+        count.textContent = total
+          ? (offset + 1) + "–" + (offset + data.length)
+            + " de " + total
+          : "Todavía no hay tareas.";
+
+        for (const task of data) {
+          const row = document.createElement("article");
+          row.style.cssText =
+            "padding:18px 0;border-bottom:1px solid #eee";
+
+          const title = document.createElement("strong");
+          title.textContent =
+            (task.completada ? "✓ " : "○ ") + task.titulo;
+
+          const detail = document.createElement("p");
+          detail.className = "small";
+
+          const exp = task.procurai_expedientes;
+          detail.textContent =
+            (exp
+              ? exp.numero + (exp.cliente ? " · " + exp.cliente : "")
+              : "Expediente")
+            + " · "
+            + (task.fecha
+              ? task.fecha.split("-").reverse().join("/")
+              : "Sin fecha")
+            + " · "
+            + (task.completada ? "Completada" : "Pendiente");
+
+          const notes = document.createElement("p");
+          notes.textContent = task.notas;
+          notes.style.cssText =
+            "white-space:pre-wrap;margin:10px 0";
+
+          const buttons = document.createElement("div");
+          buttons.className = "buttons";
+
+          const edit = document.createElement("button");
+          edit.type = "button";
+          edit.className = "secondary";
+          edit.textContent = "Editar";
+
+          edit.onclick = () => {
+            if (busy || !ready) return;
+
+            if (![...select.options].some(
+              option => option.value === task.expediente_id
+            )) {
+              status.textContent =
+                "Recarga la página para actualizar los expedientes.";
+              return;
+            }
+
+            editing = task.id;
+            select.value = task.expediente_id;
+            select.disabled = true;
+
+            fields.namedItem("titulo").value = task.titulo;
+            fields.namedItem("fecha").value = task.fecha || "";
+            fields.namedItem("notas").value = task.notas;
+
+            heading.textContent = "Editar tarea";
+            status.textContent =
+              "Modifica los datos y pulsa Guardar tarea.";
+
+            root.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+
+            fields.namedItem("titulo").focus();
+          };
+
+          const toggle = document.createElement("button");
+          toggle.type = "button";
+          toggle.className = "secondary";
+          toggle.textContent = task.completada
+            ? "Volver a pendiente"
+            : "Marcar completada";
+
+          toggle.onclick = async () => {
+            if (busy) return;
+
+            lock(true);
+            toggle.disabled = true;
+            status.textContent = "Guardando estado…";
+
+            try {
+              const { error } = await db
+                .from("procurai_tareas")
+                .update({ completada: !task.completada })
+                .eq("id", task.id)
+                .select("id")
+                .single();
+
+              if (error) throw error;
+
+              status.textContent = "Estado guardado.";
+              await load();
+            } catch (error) {
+              status.textContent =
+                "No se pudo confirmar el cambio: " + error.message;
+            } finally {
+              toggle.disabled = false;
+              lock(false);
+            }
+          };
+
+          buttons.append(edit, toggle);
+          row.append(title, detail, notes, buttons);
+          list.appendChild(row);
+        }
+      } catch (error) {
+        count.textContent =
+          "No se pudieron cargar las tareas: " + error.message;
+      } finally {
+        lock(false);
+      }
+    }
+
+    prev.onclick = () => {
+      if (busy || prev.disabled) return;
+      offset = Math.max(0, offset - 25);
+      load();
+    };
+
+    next.onclick = () => {
+      if (busy || next.disabled) return;
+      offset += 25;
+      load();
+    };
+
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (busy || !ready) return;
+
+      const payload = {
+        titulo: fields.namedItem("titulo").value.trim(),
+        fecha: fields.namedItem("fecha").value || null,
+        notas: fields.namedItem("notas").value.trim()
+      };
+
+      if (!payload.titulo) {
+        status.textContent = "Escribe el título de la tarea.";
+        return;
+      }
+
+      const expediente = select.value;
+      lock(true);
+      status.textContent = "Guardando tarea…";
+
+      try {
+        const query = editing
+          ? db.from("procurai_tareas")
+              .update(payload)
+              .eq("id", editing)
+              .eq("expediente_id", expediente)
+          : db.from("procurai_tareas")
+              .insert({
+                ...payload,
+                expediente_id: expediente
+              });
+
+        const { error } = await query.select("id").single();
+        if (error) throw error;
+
+        reset();
+        offset = 0;
+        status.textContent = "Tarea guardada.";
+        await load();
+      } catch (error) {
+        status.textContent =
+          "No se pudo confirmar el guardado: " + error.message
+          + ". Revisa la lista antes de repetir.";
+
+        await load();
+      } finally {
+        lock(false);
+      }
+    };
+
+    (async () => {
+      lock(true);
+      status.textContent = "Cargando expedientes…";
+
+      try {
+        for (let start = 0; ; start += 500) {
+          const { data, error } = await db
+            .from("procurai_expedientes")
+            .select("id,numero,cliente")
+            .order("numero")
+            .order("id")
+            .range(start, start + 499);
+
+          if (error) throw error;
+
+          for (const exp of data) {
+            const option = document.createElement("option");
+            option.value = exp.id;
+            option.textContent = exp.numero
+              + (exp.cliente ? " · " + exp.cliente : "");
+            select.appendChild(option);
+          }
+
+          if (data.length < 500) break;
+        }
+
+        ready = select.options.length > 0;
+        status.textContent = ready
+          ? ""
+          : "Crea primero un expediente.";
+
+        await load();
+      } catch (error) {
+        status.textContent =
+          "No se pudieron cargar los expedientes: " + error.message;
+      } finally {
+        lock(false);
+      }
+    })();
+  }
+
+  const main = document.querySelector("main");
+
+  if (main) {
+    new MutationObserver(mount).observe(main, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  mount();
+})();
+</script>
 </body>
 </html>
