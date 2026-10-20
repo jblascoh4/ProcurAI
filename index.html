@@ -786,5 +786,151 @@ comprobarSesion();
   });
 })();
 </script>
+ <script>
+(() => {
+  function connectAnalysis() {
+    const text = document.querySelector("[data-pdf-text]");
+    if (!text) return;
+
+    const panel = text.closest("section");
+    if (panel.dataset.analysisConnected) return;
+    panel.dataset.analysisConnected = "yes";
+
+    const input = panel.querySelector("[data-pdf-input]");
+
+    const note = document.createElement("p");
+    note.className = "small";
+    note.style.marginTop = "16px";
+    note.textContent =
+      "Al analizar, se enviará el texto a OpenAI. " +
+      "El uso de la API se factura en tu cuenta de OpenAI.";
+
+    const button = document.createElement("button");
+    button.className = "primary";
+    button.style.marginTop = "12px";
+    button.textContent = "✨ Analizar con IA";
+
+    const status = document.createElement("p");
+    status.className = "small";
+    status.style.marginTop = "14px";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+
+    const result = document.createElement("div");
+    result.className = "ai-box";
+    result.style.whiteSpace = "pre-wrap";
+    result.hidden = true;
+
+    panel.append(note, button, status, result);
+
+    let controller;
+    let revision = 0;
+
+    input.addEventListener("change", () => {
+      revision++;
+      if (controller) controller.abort();
+      button.disabled = false;
+      result.hidden = true;
+      result.textContent = "";
+      status.textContent = "";
+    });
+
+    button.addEventListener("click", async () => {
+      if (input.disabled || text.hidden || !text.value.trim()) {
+        status.textContent =
+          "Selecciona un PDF y espera a que aparezca su texto.";
+        return;
+      }
+
+      if (text.value.length > 60000) {
+        status.textContent =
+          "Esta prueba admite hasta 60.000 caracteres.";
+        return;
+      }
+
+      const currentRevision = revision;
+      const documentText = text.value;
+      controller = new AbortController();
+      const requestController = controller;
+
+      button.disabled = true;
+      result.hidden = true;
+      result.textContent = "";
+      status.textContent = "Analizando el documento…";
+
+      const timer = setTimeout(
+        () => requestController.abort(), 60000
+      );
+
+      try {
+        const { data, error } = await db.auth.getSession();
+        if (error) throw error;
+
+        const token = data.session && data.session.access_token;
+        if (!token) {
+          throw new Error("Vuelve a iniciar sesión en ProcurAI.");
+        }
+
+        if (currentRevision !== revision) return;
+
+        const response = await fetch("/api/analizar", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+          },
+          body: JSON.stringify({ texto: documentText }),
+          signal: requestController.signal
+        });
+
+        const contentType =
+          response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+          throw new Error(
+            "El servidor de análisis no está disponible. " +
+            "Comprueba que el último despliegue de Vercel haya terminado."
+          );
+        }
+
+        const answer = await response.json();
+        if (!response.ok) {
+          throw new Error(answer.error || "No se pudo analizar.");
+        }
+
+        if (currentRevision !== revision) return;
+
+        if (typeof answer.analisis !== "string") {
+          throw new Error("El servidor devolvió una respuesta no válida.");
+        }
+
+        result.textContent = answer.analisis;
+        result.hidden = false;
+        status.textContent = answer.incompleto
+          ? "La respuesta quedó incompleta. No la uses como análisis completo."
+          : "Análisis terminado. Revisa el resultado con el documento original.";
+      } catch (error) {
+        if (currentRevision !== revision) return;
+        status.textContent = error.name === "AbortError"
+          ? "La solicitud tardó demasiado. Puedes intentarlo otra vez."
+          : error.message;
+      } finally {
+        clearTimeout(timer);
+        if (currentRevision === revision) {
+          button.disabled = false;
+        }
+      }
+    });
+  }
+
+  const observer = new MutationObserver(connectAnalysis);
+  observer.observe(document.querySelector("main"), {
+    childList: true,
+    subtree: true
+  });
+
+  connectAnalysis();
+})();
+</script>
 </body>
 </html>
