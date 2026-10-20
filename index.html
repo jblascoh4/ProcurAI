@@ -2690,5 +2690,229 @@ comprobarSesion();
   refresh();
 })();
 </script>
+ <script>
+(() => {
+  function mount() {
+    const main = document.querySelector("main");
+    const title = main && [...main.querySelectorAll("h1")]
+      .find(el => el.textContent.trim() === "Buscar");
+
+    const page = title?.closest(".topbar")?.parentElement;
+    if (!page || page.querySelector("[data-buscador-real]")) return;
+
+    const root = document.createElement("section");
+    root.className = "panel";
+    root.dataset.buscadorReal = "yes";
+
+    root.innerHTML = `
+      <h2>Buscar expedientes</h2>
+      <p class="small" style="margin-bottom:16px">
+        Busca por número, cliente, juzgado o abogado.
+      </p>
+
+      <form style="display:flex;gap:12px;flex-wrap:wrap">
+        <input name="consulta" required minlength="2"
+          maxlength="100"
+          aria-label="Buscar expediente"
+          placeholder="Por ejemplo: prueba o el nombre del cliente"
+          style="flex:1;min-width:200px;padding:12px;
+            border:1px solid #ddd;border-radius:10px">
+        <button type="submit" class="primary">Buscar</button>
+      </form>
+
+      <p data-status role="status" aria-live="polite"
+        style="margin:20px 0"></p>
+
+      <div data-results></div>
+
+      <div style="display:flex;gap:12px;margin-top:18px">
+        <button type="button" class="secondary"
+          data-prev disabled>Anterior</button>
+        <button type="button" class="secondary"
+          data-next disabled>Siguiente</button>
+      </div>
+
+      <button type="button" class="secondary"
+        data-expedientes style="margin-top:20px">
+        Ir a Expedientes
+      </button>
+    `;
+
+    const old = page.querySelector(".inbox");
+    if (old) old.replaceWith(root);
+    else page.appendChild(root);
+
+    const subtitle = page.querySelector(".topbar .subtitle");
+    if (subtitle) {
+      subtitle.textContent = "Consulta tus expedientes guardados.";
+    }
+
+    const form = root.querySelector("form");
+    const input = form.elements.namedItem("consulta");
+    const submit = form.querySelector("button");
+    const status = root.querySelector("[data-status]");
+    const results = root.querySelector("[data-results]");
+    const prev = root.querySelector("[data-prev]");
+    const next = root.querySelector("[data-next]");
+
+    let query = "";
+    let offset = 0;
+    let total = 0;
+    let busy = false;
+
+    root.querySelector("[data-expedientes]").onclick = () => {
+      document.querySelectorAll(".menu-item")[2]?.click();
+    };
+
+    function lock(value) {
+      busy = value;
+      input.disabled = value;
+      submit.disabled = value;
+      prev.disabled = value || offset === 0;
+      next.disabled = value || offset + 25 >= total;
+    }
+
+    async function search() {
+      lock(true);
+      results.replaceChildren();
+      status.textContent = "Buscando…";
+
+      try {
+        const pattern = "%" + query
+          .replace(/[\\%_]/g, "\\$&") + "%";
+
+        const quoted = '"' + pattern
+          .replace(/\\/g, "\\\\")
+          .replace(/"/g, '\\"') + '"';
+
+        const filters = [
+          "numero",
+          "cliente",
+          "juzgado",
+          "abogado"
+        ].map(field => field + ".ilike." + quoted).join(",");
+
+        const { data, error, count } = await db
+          .from("procurai_expedientes")
+          .select(
+            "id,numero,cliente,juzgado,abogado,estado,notas",
+            { count: "exact" }
+          )
+          .or(filters)
+          .order("numero")
+          .order("id")
+          .range(offset, offset + 24);
+
+        if (error) throw error;
+
+        total = count || 0;
+
+        status.textContent = total
+          ? (offset + 1) + "–" + (offset + data.length)
+            + " de " + total + ' resultados para «' + query + '».'
+          : 'No hay expedientes que coincidan con «' + query + '».';
+
+        for (const exp of data) {
+          const row = document.createElement("article");
+          row.style.cssText =
+            "padding:20px 0;border-bottom:1px solid #eee";
+
+          const heading = document.createElement("h3");
+          heading.textContent = exp.numero
+            + (exp.cliente ? " · " + exp.cliente : "");
+
+          const details = document.createElement("details");
+          const summary = document.createElement("summary");
+          summary.textContent = "Ver ficha";
+          summary.style.cssText =
+            "cursor:pointer;margin:12px 0";
+
+          details.appendChild(summary);
+
+          const states = {
+            abierto: "Abierto",
+            en_curso: "En curso",
+            cerrado: "Cerrado"
+          };
+
+          const values = [
+            ["Cliente", exp.cliente || "Sin indicar"],
+            ["Juzgado", exp.juzgado || "Sin indicar"],
+            ["Abogado", exp.abogado || "Sin indicar"],
+            ["Estado", states[exp.estado] || exp.estado],
+            ["Notas", exp.notas || "Sin notas"]
+          ];
+
+          for (const [label, value] of values) {
+            const paragraph = document.createElement("p");
+            paragraph.style.cssText =
+              "margin:10px 0;white-space:pre-wrap";
+
+            const strong = document.createElement("strong");
+            strong.textContent = label + ": ";
+
+            paragraph.append(
+              strong,
+              document.createTextNode(value)
+            );
+
+            details.appendChild(paragraph);
+          }
+
+          row.append(heading, details);
+          results.appendChild(row);
+        }
+      } catch (error) {
+        total = 0;
+        status.textContent =
+          "No se pudo completar la búsqueda: " + error.message;
+      } finally {
+        lock(false);
+      }
+    }
+
+    form.onsubmit = event => {
+      event.preventDefault();
+      if (busy) return;
+
+      query = input.value.trim();
+
+      if (query.length < 2) {
+        status.textContent = "Escribe al menos dos caracteres.";
+        return;
+      }
+
+      offset = 0;
+      search();
+    };
+
+    prev.onclick = () => {
+      if (busy || prev.disabled) return;
+      offset = Math.max(0, offset - 25);
+      search();
+    };
+
+    next.onclick = () => {
+      if (busy || next.disabled) return;
+      offset += 25;
+      search();
+    };
+
+    status.textContent =
+      "Escribe lo que quieres encontrar y pulsa Buscar.";
+  }
+
+  const main = document.querySelector("main");
+
+  if (main) {
+    new MutationObserver(mount).observe(main, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  mount();
+})();
+</script>
 </body>
 </html>
